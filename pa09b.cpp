@@ -1,0 +1,270 @@
+/// @file pa09b.cpp
+/// @author Jason Lui
+/// @date 2022/05/02 (YYYY/MM/DD)
+/// @note I pledge my word of honor that I have complied with the CSN Academic
+/// Integrity Policy while completing this assignment.
+/// @brief Program that reads a PPM image file into memory, and proceeds to
+/// copy it into a new file named "output.ppm". A header containing a name
+/// and email address are attached near the top of the output file.
+/// Part 2: Flop, Flip, and add a Sepia gradient to the image file, before
+/// writing it to output.
+/// @note Took about 10 hours to finish.
+
+#include <iostream>
+#include <fstream>
+
+using namespace std;
+
+struct pixel_t {
+    unsigned short red;    // red   intensity [0,256)
+    unsigned short green;  // green intensity [0,256)
+    unsigned short blue;   // blue  intensity [0,256)
+};
+
+struct image_t {
+    unsigned int width;         // variable for the width of an image_t
+    unsigned int height;        // variable for the height of an image_t
+    unsigned short max_colors;  // will only be [0,256) for this assignment
+    pixel_t data[1024][1024];   // array holding the images' data
+};
+
+void read_pixel(std::ifstream& infile, pixel_t& pixel);
+void write_pixel(std::ofstream& outfile, const pixel_t& pixel);
+bool read_image(std::ifstream& infile, image_t& image);
+void write_image(std::ofstream& outfile, const image_t& image);
+void flop(image_t& image);
+void sepia(image_t& image);
+
+int main(int argc, const char *argv[]) {
+    unsigned int EXIT_STATUS = 0;  // used for returning an exit status
+    // 0 = success, 1 = fail
+
+    // if argc = 3, or rather, if the amount of commands typed in through the
+    // terminal is exactly 3, run this below. i.e: in "./a.out input.ppm output
+    // .ppm"... "./a.out" is 1, "input.ppm" is 2, and "output.ppm" is 3.
+
+    if (argc == 3) {
+        image_t image;             // variable for a structure called image
+        ifstream infile;           // variable for an input file stream
+        ofstream outfile;          // variable for an output file stream
+
+        // this command below, combined with the variables contained inside of
+        // int main, will open the second command typed in when this program
+        // is ran through the terminal. i.e: in "./a.out eye.ppm",
+        // eye.ppm = argv[1]
+        infile.open(argv[1]);
+
+        // if the read_image function returns a true value, run these commands.
+        // otherwise, do nothing and return an exit status of 1 (fail.)
+        if (read_image(infile, image) == true) {
+            // this line below will create a file set to whatever the user
+            // specified. the specification is in the 3rd terminal command.
+            outfile.open(argv[2]);
+            flop(image);
+            sepia(image);
+            write_image(outfile, image);
+            outfile.close();
+            EXIT_STATUS = 0;
+        } else {
+            cout << "The file has not been read correctly... exiting program."
+                 << '\n';
+            EXIT_STATUS = 1;
+        }
+
+
+        infile.close();
+    }
+
+    return EXIT_STATUS;
+}
+
+/// ---------------------------------------------------------------------------
+/// @brief Reads an RGB color triplet into a pixel_t from an input file.
+/// @param [in, out] infile the input stream file. This reads data in from a
+///                         selected file.
+/// @param [in, out] pixel the pixel structure, containing both the pixels
+///                        themselves, and their RGB values.
+/// @returns true if image is read successfully and is of correct size.
+/// ---------------------------------------------------------------------------
+void read_pixel(std::ifstream& infile, pixel_t& pixel) {
+    infile >> pixel.red >> pixel.green >> pixel.blue;
+}
+
+/// ---------------------------------------------------------------------------
+/// @brief Writes a pixel_t's RGB components to an output file stream.
+/// @param [in, out] outfile the output stream file. This prints data out to
+///                          a separate file.
+/// @param [in, out] pixel the pixel structure, containing both the pixels
+///                        themselves, and their RGB values.
+/// @returns true if image is read successfully and is of correct size.
+/// ---------------------------------------------------------------------------
+void write_pixel(std::ofstream& outfile, const pixel_t& pixel) {
+    outfile << pixel.red << " " << pixel.green << " " << pixel.blue << " ";
+}
+
+/// ---------------------------------------------------------------------------
+/// @brief Reads a P3 PPM image from the input file stream.
+/// @param [in, out] infile the input stream file. This reads data in from a
+///                         selected file.
+/// @param [in, out] image the image structure, containing both the pixels
+///                        themselves, and additional information.
+/// @returns true if image is read successfully and is of correct size.
+/// ---------------------------------------------------------------------------
+bool read_image(std::ifstream& infile, image_t& image) {
+    // if the file was read successfully (it exists/isnt corrupt or something),
+    // we can use infile.good() to check it.
+    if (infile.good()) {
+
+        if (infile.get() == 'P') {
+            if (infile.get() == '3') {
+                infile.ignore();
+
+                while (infile.peek() == '#') {
+                    infile.ignore(65535, '\n');
+                    infile.peek();
+                }
+
+                infile >> image.width >> image.height >> image.max_colors;
+
+                if (image.width > 1024) {
+                    // This program only supports images of up to 1024x1024.
+                    // This if statement will trip if it reads an image with
+                    // dimensions higher than 1024 (so 1025+ ...)
+                    cout << "Only images of up to 1024x1024 are supported..."
+                         << '\n';
+                    return false;
+                } else if (image.height > 1024) {
+                    // This program only supports images of up to 1024x1024.
+                    // This if statement will trip if it reads an image with
+                    // dimensions higher than 1024 (so 1025+ ...)
+                    cout << "Only images of up to 1024x1024 are supported..."
+                         << '\n';
+                    return false;
+                } else if (image.max_colors > 255) {
+                    // This program only supports a color range of 1-255.
+                    // This if statement will trip if it reads an image with
+                    // a color profile over 255.
+                    cout << "Only a color range of 1-255 is supported...\n";
+                    return false;
+                }
+
+                // a for loop used to store the RGB pixel_t's. Note the usage
+                // of a function within a function? And the clever usage of an
+                // array inside of another structure.
+                else {
+                    for (unsigned int i = 0; i < image.width; ++i) {
+                        for (unsigned int j = 0; j < image.height; ++j) {
+                            read_pixel(infile, image.data[i][j]);
+                        }
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    } else {
+        return false;
+    }
+
+}
+
+/// ---------------------------------------------------------------------------
+/// @brief Writes a P3 PPM image to the output file stream.
+/// @param [in, out] outfile the output stream file. This prints data out to
+///                          a separate file.
+/// @param [in, out] image the image structure, containing both the pixels
+///                        themselves, and additional information.
+/// ---------------------------------------------------------------------------
+void write_image(std::ofstream& outfile, const image_t& image) {
+
+    // attaching the magic number, a comment line, and the dimensions and
+    // max colors depth of the image.
+    outfile << "P3\n" << "# Jason Lui <a5002430194@bellagio.csn.edu>\n"
+            << image.width << ' ' << image.height << '\n' << image.max_colors
+            << '\n';
+
+    // for loop to print the array out
+    for (unsigned int i = 0; i < image.width; ++i) {
+        for (unsigned int j = 0; j < image.height; ++j) {
+            write_pixel(outfile, image.data[i][j]);
+
+        }
+
+        outfile << '\n';
+    }
+}
+
+/// ---------------------------------------------------------------------------
+/// @brief Reverses the image horizontally and vertically.
+/// @param [in, out] image the image structure, containing both the pixels
+///                        themselves, and additional information.
+/// ---------------------------------------------------------------------------
+void flop(image_t& image) {
+    /// this section of code does both flipping and flopping at the same time..
+    int first_index = 0;               // variable used for indexing through
+                                       // the array
+    int last_index = image.width - 1;  // variable used for indexing through
+                                       // the array (set to the image width)
+
+    while (first_index < last_index) {
+        for (unsigned int i = 0; i < image.height; i++) {
+            pixel_t holder = image.data[first_index][i];
+            image.data[first_index][i] =
+                image.data[last_index][(image.height - 1) - i];
+            image.data[last_index][(image.height - 1) - i] = holder;
+        }
+
+        ++first_index;
+        --last_index;
+
+    }
+}
+
+/// ---------------------------------------------------------------------------
+/// @brief Adds a sepia shade to the image.
+/// @param [in, out] image the image structure, containing both the pixels
+///                        themselves, and additional information.
+/// ---------------------------------------------------------------------------
+void sepia(image_t& image) {
+    int tr;  // variable for converting colors to sepia
+    int tg;  // variable for converting colors to sepia
+    int tb;  // variable for converting colors to sepia
+
+    for (unsigned int i = 0; i < image.width; ++i) {
+        for (unsigned int j = 0; j < image.height; ++j) {
+            // grabbing each pixel's 3 shades and multiplying them by sepia
+            // values
+            tr = ((image.data[i][j].red * .393) +
+                  (image.data[i][j].green * .769) +
+                  (image.data[i][j].blue * .189));
+            tg = ((image.data[i][j].red * .349) +
+                  (image.data[i][j].green * .686) +
+                  (image.data[i][j].blue * .168));
+            tb = ((image.data[i][j].red * .272) +
+                  (image.data[i][j].green * .534) +
+                  (image.data[i][j].blue * .131));
+
+            // if any of the pixels have a color value of over 255, set it back
+            // to 255.
+            if (tr > 255) {
+                tr = 255;
+            }
+
+            if (tg > 255) {
+                tg = 255;
+            }
+
+            if (tb > 255) {
+                tb = 255;
+            }
+
+            // applying the new sepia shade to the pixels inside of the image
+            image.data[i][j].red = tr;
+            image.data[i][j].green = tg;
+            image.data[i][j].blue = tb;
+
+        }
+    }
+}
